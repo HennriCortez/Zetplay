@@ -2,10 +2,6 @@ package com.zetplay.zetplaymod;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import com.zetplay.zetplaymod.ChatCommandListener;
-import com.zetplay.zetplaymod.ZetPlayAudio;
-import com.zetplay.zetplaymod.ZetPlayPlugin;
-
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -14,7 +10,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -36,9 +32,23 @@ public class ZetPlayCommands {
 
     private static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         
-        // ── /play <song-title> ──────────────────────────────────────────────
+        // ── /play <song-title> (Alias: /p) ──────────────────────────────────
         dispatcher.register(
             Commands.literal("play")
+                .then(Commands.argument("song-title", StringArgumentType.greedyString())
+                    .suggests((context, builder) -> SharedSuggestionProvider.suggest(
+                        List.of("<song-title>", "Minecraft Soundtrack"), builder))
+                    .executes(context -> {
+                        ServerPlayer player = context.getSource().getPlayerOrException();
+                        String query = StringArgumentType.getString(context, "song-title");
+                        handlePlay(player, query);
+                        return 1;
+                    })
+                )
+        );
+
+        dispatcher.register(
+            Commands.literal("p")
                 .then(Commands.argument("song-title", StringArgumentType.greedyString())
                     .suggests((context, builder) -> SharedSuggestionProvider.suggest(
                         List.of("<song-title>", "Minecraft Soundtrack"), builder))
@@ -92,18 +102,7 @@ public class ZetPlayCommands {
                 })
         );
 
-        // ── /shazam / /title ────────────────────────────────────────────────
-        dispatcher.register(
-            Commands.literal("shazam")
-                .executes(context -> {
-                    ServerPlayer player = context.getSource().getPlayerOrException();
-                    ChatCommandListener listener = ChatCommandListener.INSTANCE;
-                    if (listener != null) {
-                        listener.executeTitle(player);
-                    }
-                    return 1;
-                })
-        );
+        // ── /title ──────────────────────────────────────────────────────────
         dispatcher.register(
             Commands.literal("title")
                 .executes(context -> {
@@ -120,7 +119,10 @@ public class ZetPlayCommands {
         dispatcher.register(Commands.literal("skip").executes(c -> handleSkip(c.getSource().getPlayerOrException())));
         dispatcher.register(Commands.literal("pause").executes(c -> handlePause(c.getSource().getPlayerOrException())));
         dispatcher.register(Commands.literal("resume").executes(c -> handleResume(c.getSource().getPlayerOrException())));
-        dispatcher.register(Commands.literal("stop").executes(c -> handleStop(c.getSource().getPlayerOrException())));
+        
+        // ── /s for stopping playback ────────────────────────────────────────
+        dispatcher.register(Commands.literal("s").executes(c -> handleStop(c.getSource().getPlayerOrException())));
+        
         dispatcher.register(Commands.literal("queue").executes(c -> handleQueue(c.getSource().getPlayerOrException())));
         dispatcher.register(Commands.literal("q").executes(c -> handleQueue(c.getSource().getPlayerOrException())));
         dispatcher.register(Commands.literal("np").executes(c -> handleNowPlaying(c.getSource().getPlayerOrException())));
@@ -166,7 +168,7 @@ public class ZetPlayCommands {
             return;
         }
         if (plugin.playQueue.getCurrent() != null) {
-            sender.sendSystemMessage(Component.literal("§c[ZetPlay] Music queue active. Use §a/stop§c first."));
+            sender.sendSystemMessage(Component.literal("§c[ZetPlay] Music queue active. Use §a/s§c first."));
             return;
         }
         if (listener.isStreamRunning()) {
@@ -231,7 +233,7 @@ public class ZetPlayCommands {
         ZetPlayPlugin plugin = ZetPlayPlugin.INSTANCE;
         if (plugin == null) return 0;
         plugin.playQueue.requestStop();
-        broadcast(sender, "§b[ZetPlay] §f⏹ Stopped. Queue cleared.");
+        broadcast(sender, "§b[ZetPlay] §f⏹ Playback stopped & queue cleared.");
         return 1;
     }
 
@@ -282,12 +284,12 @@ public class ZetPlayCommands {
     }
 
     private static boolean isValidUrl(String s) {
-    try {
-        java.net.URL url = java.net.URI.create(s).toURL();
-        String proto = url.getProtocol();
-        return proto.equals("http") || proto.equals("https");
-    } catch (Exception e) {
-        return false;
-    }
+        try {
+            URL url = URI.create(s).toURL();
+            String proto = url.getProtocol();
+            return proto.equals("http") || proto.equals("https");
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
