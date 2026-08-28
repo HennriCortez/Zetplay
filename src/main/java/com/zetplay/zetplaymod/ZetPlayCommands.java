@@ -102,18 +102,10 @@ public class ZetPlayCommands {
                 })
         );
 
-        // ── /title ──────────────────────────────────────────────────────────
-        dispatcher.register(
-            Commands.literal("name")
-                .executes(context -> {
-                    ServerPlayer player = context.getSource().getPlayerOrException();
-                    ChatCommandListener listener = ChatCommandListener.INSTANCE;
-                    if (listener != null) {
-                        listener.executeTitle(player);
-                    }
-                    return 1;
-                })
-        );
+        // ── Dynamic /np Command (Aliases: /nowplaying, /name) ──────────────
+        dispatcher.register(Commands.literal("np").executes(c -> handleMergedNowPlaying(c.getSource().getPlayerOrException())));
+        dispatcher.register(Commands.literal("nowplaying").executes(c -> handleMergedNowPlaying(c.getSource().getPlayerOrException())));
+        dispatcher.register(Commands.literal("name").executes(c -> handleMergedNowPlaying(c.getSource().getPlayerOrException())));
 
         // ── Queue Control Commands ──────────────────────────────────────────
         dispatcher.register(Commands.literal("skip").executes(c -> handleSkip(c.getSource().getPlayerOrException())));
@@ -125,7 +117,6 @@ public class ZetPlayCommands {
         
         dispatcher.register(Commands.literal("queue").executes(c -> handleQueue(c.getSource().getPlayerOrException())));
         dispatcher.register(Commands.literal("q").executes(c -> handleQueue(c.getSource().getPlayerOrException())));
-        dispatcher.register(Commands.literal("np").executes(c -> handleNowPlaying(c.getSource().getPlayerOrException())));
     }
 
     // ── Command Action Handlers ──────────────────────────────────────────────
@@ -177,6 +168,31 @@ public class ZetPlayCommands {
         }
 
         listener.startStream(url, sender, server, plugin);
+    }
+
+    private static int handleMergedNowPlaying(ServerPlayer sender) {
+        ZetPlayPlugin plugin = ZetPlayPlugin.INSTANCE;
+        ChatCommandListener listener = ChatCommandListener.INSTANCE;
+        if (plugin == null || listener == null) return 0;
+
+        ZetPlayQueue q = plugin.playQueue;
+        ZetPlayQueue.Track current = q.getCurrent();
+
+        // 1. If playing from queue (/play): Read directly from memory (no ACR search needed)
+        if (current != null) {
+            sender.sendSystemMessage(Component.literal("§b[ZetPlay] §f🎵 Now playing: §e" + current.title() + (q.isPaused() ? " §7(paused)" : "")));
+            return 1;
+        }
+
+        // 2. If a live radio stream (/stream) is running: Trigger ACRCloud recognition
+        if (listener.isStreamRunning()) {
+            listener.executeTitle(sender);
+            return 1;
+        }
+
+        // 3. Fallback when idle
+        sender.sendSystemMessage(Component.literal("§b[ZetPlay] §fNothing is currently playing or streaming."));
+        return 1;
     }
 
     private static int handleSkip(ServerPlayer sender) {
@@ -260,19 +276,6 @@ public class ZetPlayCommands {
             }
         }
         sender.sendSystemMessage(Component.literal(sb.toString()));
-        return 1;
-    }
-
-    private static int handleNowPlaying(ServerPlayer sender) {
-        ZetPlayPlugin plugin = ZetPlayPlugin.INSTANCE;
-        if (plugin == null) return 0;
-        ZetPlayQueue q = plugin.playQueue;
-        ZetPlayQueue.Track current = q.getCurrent();
-        if (current != null) {
-            sender.sendSystemMessage(Component.literal("§b[ZetPlay] §f🎵 Now playing: §e" + current.title() + (q.isPaused() ? " §7(paused)" : "")));
-        } else {
-            sender.sendSystemMessage(Component.literal("§b[ZetPlay] §fNothing is playing."));
-        }
         return 1;
     }
 
