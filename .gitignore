@@ -1,0 +1,20 @@
+# Gradle build outputs & caches
+.gradle/
+build/
+out/
+
+# Audio and media files
+*.opus
+*.mp3
+*.wav
+
+# IDE settings
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Environment & local config
+.DS_Store
+*.log

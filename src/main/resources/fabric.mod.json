@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "zetplay",
+  "version": "${version}",
+  "name": "ZetPlay",
+  "description": "In-game music bot using yt-dlp + ffmpeg, streamed through Simple Voice Chat.",
+  "authors": ["zetroc"],
+  "license": "MIT",
+  "environment": "server",
+  "entrypoints": {
+    "main": ["com.zetplay.zetplaymod.ZetPlayMod"],
+    "voicechat": ["com.zetplay.zetplaymod.ZetPlayPlugin"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "fabric-api": "*",
+    "voicechat": ">=2.6.20"
+  }
+}
