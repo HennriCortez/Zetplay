@@ -336,18 +336,16 @@ public class ChatCommandListener implements ServerMessageEvents.ChatMessage {
         currentStreamUrl = null;
     }
 
-    private boolean isStreamRunning() {
-        RadioStreamer rs = activeStreamer;
-        if (rs == null) return false;
-        if (rs.isStopped()) {
-            // Clean up stale reference
-            activeStreamer   = null;
-            streamerThread   = null;
-            currentStreamUrl = null;
-            return false;
-        }
-        return true;
+    public boolean isStreamRunning() {
+    RadioStreamer rs = activeStreamer;
+    if (rs == null) return false;
+    if (rs.isStopped()) {
+        activeStreamer = null;
+        currentStreamUrl = null;
+        return false;
     }
+    return true;
+}
 
     // ── URL validation ────────────────────────────────────────────────────────
 

@@ -1,7 +1,6 @@
 package com.zetplay.zetplaymod;
 
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,9 +13,14 @@ public class ZetPlayMod implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("[ZetPlay] Mod loaded.");
 
-        // Load configuration file (creates config/zetplay.json if missing)
+        // 1. Load Configurations
         ZetPlayConfig.load();
+        ZetPlayStations.load();
 
-        ServerMessageEvents.CHAT_MESSAGE.register(new ChatCommandListener());
+        // 2. Initialize State Helper
+        new ChatCommandListener();
+
+        // 3. Register Native Commands
+        ZetPlayCommands.register();
     }
 }
