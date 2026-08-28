@@ -152,7 +152,7 @@ private void startSendThread() {
         while (running) {
             try {
                 short[] pcm = pcmQueue.poll(20, java.util.concurrent.TimeUnit.MILLISECONDS);
-                if (pcm == null) pcm = new short[ZetPlayAudio.FRAME_SAMPLES];
+                if (pcm == null) pcm = new short[ZetPlayAudio.getFrameSamples()];
 
                 // ── CAPTURE TAP FOR AUDIO RECOGNITION ──────────────────────
                 if (isCapturing) {
