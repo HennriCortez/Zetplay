@@ -13,13 +13,14 @@ public class ZetPlayMod implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("[ZetPlay] Mod loaded.");
 
-        // 1. Load Configuration
+        // 1. Load Configurations
         ZetPlayConfig.load();
+        ZetPlayStations.load();
 
         // 2. Initialize State Helper
         new ChatCommandListener();
 
-        // 3. Register Native Commands (/play, /stream, /skip, etc.)
+        // 3. Register Native Commands
         ZetPlayCommands.register();
     }
 }

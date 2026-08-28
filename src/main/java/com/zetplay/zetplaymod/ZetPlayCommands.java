@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.net.URI;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,18 +62,37 @@ public class ZetPlayCommands {
                 )
         );
 
-        // ── /stream <url> ───────────────────────────────────────────────────
+        // ── /stream <station-or-url> ─────────────────────────────────────────
         dispatcher.register(
             Commands.literal("stream")
-                .then(Commands.argument("url", StringArgumentType.greedyString())
-                    .suggests((context, builder) -> SharedSuggestionProvider.suggest(
-                        List.of("https://ice1.somafm.com/groovesalad-256-mp3", "<url>"), builder))
+                .then(Commands.argument("target", StringArgumentType.greedyString())
+                    .suggests((context, builder) -> {
+                        List<String> suggestions = new ArrayList<>(ZetPlayStations.getAll().keySet());
+                        suggestions.add("<url>");
+                        return SharedSuggestionProvider.suggest(suggestions, builder);
+                    })
                     .executes(context -> {
                         ServerPlayer player = context.getSource().getPlayerOrException();
-                        String url = StringArgumentType.getString(context, "url");
-                        handleStream(player, url);
+                        String target = StringArgumentType.getString(context, "target");
+                        handleStream(player, target);
                         return 1;
                     })
+                )
+        );
+
+        // ── /register <station-name> <url> ──────────────────────────────────
+        dispatcher.register(
+            Commands.literal("register")
+                .then(Commands.argument("name", StringArgumentType.word())
+                    .then(Commands.argument("url", StringArgumentType.greedyString())
+                        .executes(context -> {
+                            ServerPlayer player = context.getSource().getPlayerOrException();
+                            String name = StringArgumentType.getString(context, "name");
+                            String url = StringArgumentType.getString(context, "url");
+                            handleRegisterStation(player, name, url);
+                            return 1;
+                        })
+                    )
                 )
         );
 
@@ -102,33 +122,31 @@ public class ZetPlayCommands {
                 })
         );
 
-        // ── /title ──────────────────────────────────────────────────────────
-        dispatcher.register(
-            Commands.literal("name")
-                .executes(context -> {
-                    ServerPlayer player = context.getSource().getPlayerOrException();
-                    ChatCommandListener listener = ChatCommandListener.INSTANCE;
-                    if (listener != null) {
-                        listener.executeTitle(player);
-                    }
-                    return 1;
-                })
-        );
+        // ── Dynamic /np Command (Aliases: /nowplaying, /name) ──────────────
+        dispatcher.register(Commands.literal("np").executes(c -> handleMergedNowPlaying(c.getSource().getPlayerOrException())));
+        dispatcher.register(Commands.literal("nowplaying").executes(c -> handleMergedNowPlaying(c.getSource().getPlayerOrException())));
+        dispatcher.register(Commands.literal("name").executes(c -> handleMergedNowPlaying(c.getSource().getPlayerOrException())));
 
         // ── Queue Control Commands ──────────────────────────────────────────
         dispatcher.register(Commands.literal("skip").executes(c -> handleSkip(c.getSource().getPlayerOrException())));
         dispatcher.register(Commands.literal("pause").executes(c -> handlePause(c.getSource().getPlayerOrException())));
         dispatcher.register(Commands.literal("resume").executes(c -> handleResume(c.getSource().getPlayerOrException())));
-        
-        // ── /s for stopping playback ────────────────────────────────────────
         dispatcher.register(Commands.literal("s").executes(c -> handleStop(c.getSource().getPlayerOrException())));
-        
         dispatcher.register(Commands.literal("queue").executes(c -> handleQueue(c.getSource().getPlayerOrException())));
         dispatcher.register(Commands.literal("q").executes(c -> handleQueue(c.getSource().getPlayerOrException())));
-        dispatcher.register(Commands.literal("np").executes(c -> handleNowPlaying(c.getSource().getPlayerOrException())));
     }
 
     // ── Command Action Handlers ──────────────────────────────────────────────
+
+    private static void handleRegisterStation(ServerPlayer sender, String name, String url) {
+        if (!isValidUrl(url)) {
+            sender.sendSystemMessage(Component.literal("§c[ZetPlay] Invalid URL format. Must start with http:// or https://"));
+            return;
+        }
+
+        ZetPlayStations.registerStation(name, url);
+        sender.sendSystemMessage(Component.literal("§b[ZetPlay] §fRegistered radio station §e" + name.toLowerCase() + "§f -> §7" + url));
+    }
 
     private static void handlePlay(ServerPlayer sender, String query) {
         ZetPlayPlugin plugin = ZetPlayPlugin.INSTANCE;
@@ -157,14 +175,20 @@ public class ZetPlayCommands {
         });
     }
 
-    private static void handleStream(ServerPlayer sender, String url) {
+    private static void handleStream(ServerPlayer sender, String target) {
         ZetPlayPlugin plugin = ZetPlayPlugin.INSTANCE;
         MinecraftServer server = sender.level().getServer();
         ChatCommandListener listener = ChatCommandListener.INSTANCE;
         if (plugin == null || server == null || listener == null) return;
 
+        // Resolve target: Check if target is a registered station shortcut, otherwise treat as URL
+        String url = ZetPlayStations.getUrl(target);
+        if (url == null) {
+            url = target;
+        }
+
         if (!isValidUrl(url)) {
-            sender.sendSystemMessage(Component.literal("§c[ZetPlay] Invalid URL. Must start with http:// or https://"));
+            sender.sendSystemMessage(Component.literal("§c[ZetPlay] Invalid station or URL. Register first with §a/register <name> <url>"));
             return;
         }
         if (plugin.playQueue.getCurrent() != null) {
@@ -177,6 +201,30 @@ public class ZetPlayCommands {
         }
 
         listener.startStream(url, sender, server, plugin);
+    }
+
+    private static int handleMergedNowPlaying(ServerPlayer sender) {
+        ZetPlayPlugin plugin = ZetPlayPlugin.INSTANCE;
+        ChatCommandListener listener = ChatCommandListener.INSTANCE;
+        if (plugin == null || listener == null) return 0;
+
+        ZetPlayQueue q = plugin.playQueue;
+        ZetPlayQueue.Track current = q.getCurrent();
+
+        // 1. Queue track active
+        if (current != null) {
+            sender.sendSystemMessage(Component.literal("§b[ZetPlay] §f🎵 Now playing: §e" + current.title() + (q.isPaused() ? " §7(paused)" : "")));
+            return 1;
+        }
+
+        // 2. Radio stream active -> Trigger ACRCloud
+        if (listener.isStreamRunning()) {
+            listener.executeTitle(sender);
+            return 1;
+        }
+
+        sender.sendSystemMessage(Component.literal("§b[ZetPlay] §fNothing is currently playing or streaming."));
+        return 1;
     }
 
     private static int handleSkip(ServerPlayer sender) {
@@ -260,19 +308,6 @@ public class ZetPlayCommands {
             }
         }
         sender.sendSystemMessage(Component.literal(sb.toString()));
-        return 1;
-    }
-
-    private static int handleNowPlaying(ServerPlayer sender) {
-        ZetPlayPlugin plugin = ZetPlayPlugin.INSTANCE;
-        if (plugin == null) return 0;
-        ZetPlayQueue q = plugin.playQueue;
-        ZetPlayQueue.Track current = q.getCurrent();
-        if (current != null) {
-            sender.sendSystemMessage(Component.literal("§b[ZetPlay] §f🎵 Now playing: §e" + current.title() + (q.isPaused() ? " §7(paused)" : "")));
-        } else {
-            sender.sendSystemMessage(Component.literal("§b[ZetPlay] §fNothing is playing."));
-        }
         return 1;
     }
 
