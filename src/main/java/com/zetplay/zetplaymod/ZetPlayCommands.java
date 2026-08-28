@@ -104,7 +104,7 @@ public class ZetPlayCommands {
 
         // ── /title ──────────────────────────────────────────────────────────
         dispatcher.register(
-            Commands.literal("title")
+            Commands.literal("name")
                 .executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
                     ChatCommandListener listener = ChatCommandListener.INSTANCE;
